@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-Disease Risk Screening — Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F5F6F4; --panel: #FFFFFF; --ink: #17201F; --ink-soft: #57635F;
+    --hairline: #DAE0DC; --safe: #1F6F5C; --safe-bg: #E9F3F0;
+    --warn: #A8741B; --warn-bg: #FBF2E3; --risk: #B23A2E; --risk-bg: #FBEBE9; --idle: #C7CEC9;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  h1, h2, h3 { font-family: 'Newsreader', serif; font-weight: 500; margin: 0; }
+  code { font-family: 'IBM Plex Mono', monospace; background: #EDEFEC; padding: 1px 5px; border-radius: 3px; font-size: 0.92em; }
+
+  .nav { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; background: rgba(245,246,244,0.92); backdrop-filter: blur(6px); border-bottom: 1px solid var(--hairline); }
+  .nav .brand { display: flex; align-items: center; gap: 10px; font-family: 'Newsreader', serif; font-size: 18px; }
+  .nav .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--safe); flex-shrink: 0; transition: background 0.3s ease; }
+  .nav .brand .dot.offline { background: var(--risk); }
+  .nav .links { display: flex; gap: 28px; font-size: 13.5px; color: var(--ink-soft); }
+  .nav .links a { text-decoration: none; color: inherit; }
+  .nav .links a:hover { color: var(--ink); }
+  @media (max-width: 760px) { .nav .links { display: none; } }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+
+  .backend-banner { display: none; background: var(--risk-bg); color: var(--risk); border-bottom: 1px solid var(--risk); padding: 10px 32px; font-size: 13px; }
+  .backend-banner.show { display: block; }
+  .backend-banner code { background: #f6d9d6; }
+
+  .hero { padding: 52px 0 40px; border-bottom: 1px solid var(--hairline); }
+  .hero h1 { font-size: 34px; line-height: 1.22; max-width: 24ch; letter-spacing: -0.01em; }
+  .hero p.lede { margin-top: 16px; max-width: 66ch; color: var(--ink-soft); font-size: 16px; }
+
+  .pipeline-diagram { display: flex; align-items: stretch; gap: 0; margin-top: 36px; }
+  .pd-stage { flex: 1; border: 1px solid var(--hairline); background: var(--panel); padding: 14px 16px; position: relative; transition: border-color 0.3s ease; }
+  .pd-stage + .pd-stage { margin-left: -1px; }
+  .pd-stage .step-n { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--idle); transition: color 0.3s ease; }
+  .pd-stage .step-title { font-size: 13.5px; font-weight: 500; margin-top: 7px; }
+  .pd-stage .step-detail { font-size: 11.5px; color: var(--ink-soft); margin-top: 5px; min-height: 28px; }
+  .pd-stage::after { content: "→"; position: absolute; right: -12px; top: 50%; transform: translateY(-50%); color: var(--hairline); font-size: 15px; z-index: 2; background: var(--paper); width: 18px; text-align: center; }
+  .pd-stage:last-child::after { content: ""; }
+  .pd-stage.active { border-color: var(--ink); }
+  .pd-stage.active .step-n { color: var(--ink); }
+  .pd-stage.done { border-color: var(--safe); }
+  .pd-stage.done .step-n { color: var(--safe); }
+  .pd-stage.err { border-color: var(--risk); }
+  .pd-stage.err .step-n { color: var(--risk); }
+  @media (max-width: 860px) {
+    .pipeline-diagram { flex-direction: column; }
+    .pd-stage + .pd-stage { margin-left: 0; margin-top: -1px; }
+    .pd-stage::after { content: "↓"; right: 50%; top: auto; bottom: -12px; transform: translateX(50%); }
+  }
+
+  .section { padding: 48px 0; border-bottom: 1px solid var(--hairline); }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+  .section-head h2 { font-size: 24px; }
+  .section-head .idx { font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); font-size: 12.5px; }
+  .section-sub { color: var(--ink-soft); max-width: 68ch; margin-top: 6px; margin-bottom: 28px; }
+
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--hairline); margin-bottom: 22px; flex-wrap: wrap; }
+  .tab-btn { font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; color: var(--ink-soft); background: none; border: none; padding: 10px 4px; margin-right: 22px; cursor: pointer; border-bottom: 2px solid transparent; translate: 0 1px; }
+  .tab-btn.active { color: var(--ink); border-bottom-color: var(--safe); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 26px; }
+  @media (max-width: 560px) { .field-grid { grid-template-columns: 1fr; } }
+  .field label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 5px; }
+  .field input[type="number"], .field select { width: 100%; font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; border: 1px solid var(--hairline); background: var(--panel); color: var(--ink); padding: 8px 10px; border-radius: 2px; }
+  .field select { font-family: 'IBM Plex Sans', sans-serif; }
+  .field input:focus, .field select:focus { outline: 2px solid var(--safe); outline-offset: 1px; }
+  .toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 26px; }
+  @media (max-width: 560px) { .toggle-grid { grid-template-columns: 1fr; } }
+  .toggle-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 13.5px; }
+  .toggle-row input { accent-color: var(--safe); width: 16px; height: 16px; }
+
+  .sample-row { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+  .btn { font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; cursor: pointer; padding: 9px 16px; border-radius: 2px; border: 1px solid var(--hairline); background: var(--panel); color: var(--ink); }
+  .btn:hover { border-color: var(--ink-soft); }
+  .btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); font-weight: 500; }
+  .btn.primary:hover { background: #0d1512; }
+  .btn.primary:disabled { opacity: 0.55; cursor: default; }
+
+  .results-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); margin-top: 32px; }
+  @media (max-width: 860px) { .results-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .results-grid { grid-template-columns: 1fr; } }
+  .result-card { background: var(--panel); padding: 18px; }
+  .result-card .disease-name { font-size: 13.5px; font-weight: 500; text-transform: capitalize; }
+  .result-card .band { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; font-size: 11.5px; font-weight: 500; border-radius: 2px; margin-top: 8px; }
+  .result-card .band .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .result-card .band.idle { background: #F0F1EF; color: var(--ink-soft); }
+  .result-card .band.idle .dot { background: var(--idle); }
+  .result-card .band.safe { background: var(--safe-bg); color: var(--safe); }
+  .result-card .band.safe .dot { background: var(--safe); }
+  .result-card .band.warn { background: var(--warn-bg); color: var(--warn); }
+  .result-card .band.warn .dot { background: var(--warn); }
+  .result-card .band.risk { background: var(--risk-bg); color: var(--risk); }
+  .result-card .band.risk .dot { background: var(--risk); }
+  .result-card .prob-num { font-family: 'IBM Plex Mono', monospace; font-size: 26px; margin-top: 10px; color: var(--idle); }
+  .result-card .prob-bar-track { height: 5px; background: var(--hairline); margin-top: 8px; border-radius: 3px; overflow: hidden; }
+  .result-card .prob-bar-fill { height: 100%; width: 0%; background: var(--idle); transition: width 0.4s ease, background 0.3s ease; }
+
+  .architecture-diagram { display: flex; flex-direction: column; gap: 0; margin-top: 8px; max-width: 520px; }
+  .arch-step { border: 1px solid var(--hairline); background: var(--panel); padding: 10px 16px; font-size: 13px; position: relative; }
+  .arch-step + .arch-step { margin-top: -1px; }
+  .arch-step .n { font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); font-size: 11px; margin-right: 10px; }
+  .arch-step::after { content: "↓"; position: absolute; left: 50%; bottom: -11px; transform: translateX(-50%); color: var(--idle); font-size: 13px; background: var(--paper); width: 16px; text-align: center; z-index: 2; }
+  .arch-step:last-child::after { content: ""; }
+
+  .disclaimer { font-size: 11.5px; color: var(--ink-soft); margin-top: 24px; border-top: 1px solid var(--hairline); padding-top: 14px; max-width: 68ch; }
+  footer { padding: 32px; text-align: left; color: var(--ink-soft); font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<div class="backend-banner" id="backendBanner">
+  Backend not reachable at this origin. Start it with <code>uvicorn api.main:app --reload</code> from the project root, then reload this page.
+</div>
+
+<nav class="nav">
+  <div class="brand"><span class="dot" id="statusDot"></span> Multi-Disease Risk Screening</div>
+  <div class="links"><a href="#overview">Overview</a><a href="#assessment">Assessment</a><a href="#architecture">Architecture</a></div>
+</nav>
+
+<div class="wrap">
+
+  <section class="hero" id="overview">
+    <h1>One patient submission, six independent disease-risk predictions</h1>
+    <p class="lede">
+      This page is a real frontend calling a real backend: submitting the
+      form below sends a <span class="mono">POST /predict/all</span>
+      request to the FastAPI service running alongside this page, which
+      loads six separately trained models and returns six independent
+      predictions.
+    </p>
+
+    <div class="pipeline-diagram" id="pipelineDiagram">
+      <div class="pd-stage" data-stage="0">
+        <div class="step-n mono">01 · FRONTEND</div>
+        <div class="step-title">Patient Data Input</div>
+        <div class="step-detail" id="stageDetail0">Form collects demographics, vitals, labs, symptoms.</div>
+      </div>
+      <div class="pd-stage" data-stage="1">
+        <div class="step-n mono">02 · BACKEND</div>
+        <div class="step-title">FastAPI Endpoint</div>
+        <div class="step-detail" id="stageDetail1"><span class="mono">POST /predict/all</span> receives the payload.</div>
+      </div>
+      <div class="pd-stage" data-stage="2">
+        <div class="step-n mono">03 · MODELS</div>
+        <div class="step-title">6 Trained ML Models</div>
+        <div class="step-detail" id="stageDetail2">Each disease model scores the patient independently.</div>
+      </div>
+      <div class="pd-stage" data-stage="3">
+        <div class="step-n mono">04 · RESPONSE</div>
+        <div class="step-title">Prediction Output</div>
+        <div class="step-detail" id="stageDetail3">JSON response rendered back into the page.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="assessment">
+    <div class="section-head"><h2>Patient data input</h2><span class="idx mono">stage 01</span></div>
+    <p class="section-sub">Grouped the way an intake form would collect it. All fields are sent in one submission.</p>
+
+    <div class="sample-row">
+      <button class="btn" id="loadLow">Load sample — low risk</button>
+      <button class="btn" id="loadHigh">Load sample — high risk</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="demo">Demographics</button>
+      <button class="tab-btn" data-tab="vitals">Vitals</button>
+      <button class="tab-btn" data-tab="labs">Labs</button>
+      <button class="tab-btn" data-tab="history">History</button>
+      <button class="tab-btn" data-tab="symptoms">Symptoms</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-demo">
+      <div class="field-grid">
+        <div class="field"><label>Age (years)</label><input type="number" id="f_age" value="54"></div>
+        <div class="field"><label>Gender</label><select id="f_gender"><option value="female">Female</option><option value="male">Male</option></select></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-vitals">
+      <div class="field-grid">
+        <div class="field"><label>Systolic BP (mmHg)</label><input type="number" id="f_sbp" value="122"></div>
+        <div class="field"><label>Diastolic BP (mmHg)</label><input type="number" id="f_dbp" value="78"></div>
+        <div class="field"><label>Heart rate (bpm)</label><input type="number" id="f_hr" value="75"></div>
+        <div class="field"><label>BMI</label><input type="number" step="0.1" id="f_bmi" value="26"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-labs">
+      <div class="field-grid">
+        <div class="field"><label>Fasting glucose (mg/dL)</label><input type="number" id="f_glucose" value="95"></div>
+        <div class="field"><label>Hemoglobin (g/dL)</label><input type="number" step="0.1" id="f_hgb" value="14"></div>
+        <div class="field"><label>Total cholesterol (mg/dL)</label><input type="number" id="f_chol" value="195"></div>
+        <div class="field"><label>WBC count (10³/µL)</label><input type="number" step="0.1" id="f_wbc" value="7.5"></div>
+        <div class="field"><label>RBC count (10⁶/µL)</label><input type="number" step="0.01" id="f_rbc" value="4.9"></div>
+        <div class="field"><label>Platelet count (10³/µL)</label><input type="number" id="f_plt" value="250"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-history">
+      <div class="toggle-grid">
+        <div class="toggle-row"><input type="checkbox" id="f_smoker"><label for="f_smoker">Current smoker</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_alcohol"><label for="f_alcohol">Regular alcohol use</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_fhd"><label for="f_fhd">Family history of diabetes</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_fhh"><label for="f_fhh">Family history of heart disease</label></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-symptoms">
+      <div class="toggle-grid">
+        <div class="toggle-row"><input type="checkbox" id="f_fatigue"><label for="f_fatigue">Fatigue</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_sob"><label for="f_sob">Shortness of breath</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_chestpain"><label for="f_chestpain">Chest pain</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_urination"><label for="f_urination">Frequent urination</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_swelling"><label for="f_swelling">Swelling / edema</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_jaundice"><label for="f_jaundice">Jaundice</label></div>
+        <div class="toggle-row"><input type="checkbox" id="f_dizzy"><label for="f_dizzy">Dizziness</label></div>
+      </div>
+    </div>
+
+    <div style="margin-top:26px;">
+      <button class="btn primary" id="runBtn">Run assessment</button>
+      <span class="mono" id="errorMsg" style="color:var(--risk); font-size:12.5px; margin-left:14px;"></span>
+    </div>
+
+    <div class="results-grid" id="resultsGrid"></div>
+
+    <div class="disclaimer">Screening estimates only — not a diagnosis. Always consult a clinician to interpret these results.</div>
+  </section>
+
+  <section class="section" id="architecture" style="border-bottom:none;">
+    <div class="section-head"><h2>System architecture</h2><span class="idx mono">build &amp; ops</span></div>
+    <p class="section-sub">
+      What you triggered above is the request-time slice (stages 01-04).
+      The full project lifecycle around it — how these models get built,
+      shipped, and kept honest over time:
+    </p>
+    <div class="architecture-diagram">
+      <div class="arch-step"><span class="n mono">01</span>Patient Information</div>
+      <div class="arch-step"><span class="n mono">02</span>Age + Blood Tests + Symptoms + Medical Reports</div>
+      <div class="arch-step"><span class="n mono">03</span>Data Preprocessing</div>
+      <div class="arch-step"><span class="n mono">04</span>ML Models <span style="color:var(--ink-soft);">(6 independent, one per disease)</span></div>
+      <div class="arch-step"><span class="n mono">05</span>Disease Prediction</div>
+      <div class="arch-step"><span class="n mono">06</span>Prediction API <span style="color:var(--ink-soft);">(FastAPI — this page's backend)</span></div>
+      <div class="arch-step"><span class="n mono">07</span>MLflow Tracking</div>
+      <div class="arch-step"><span class="n mono">08</span>Docker</div>
+      <div class="arch-step"><span class="n mono">09</span>CI/CD</div>
+      <div class="arch-step"><span class="n mono">10</span>Model Monitoring &amp; Data Drift</div>
+    </div>
+  </section>
+
+</div>
+
+<footer>Prototype frontend + backend for the Multi-Disease Prediction Platform. Not a certified medical device.</footer>
+
+<script>
+const DISEASES = ["diabetes", "heart_disease", "anemia", "liver_disease", "kidney_disease", "hypertension"];
+const DISEASE_LABELS = {
+  diabetes: "Diabetes", heart_disease: "Heart disease", anemia: "Anemia",
+  liver_disease: "Liver disease", kidney_disease: "Kidney disease", hypertension: "Hypertension",
+};
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function readPatient() {
+  return {
+    age: parseInt(document.getElementById('f_age').value, 10),
+    gender: document.getElementById('f_gender').value,
+    systolic_bp: parseFloat(document.getElementById('f_sbp').value),
+    diastolic_bp: parseFloat(document.getElementById('f_dbp').value),
+    glucose_fasting: parseFloat(document.getElementById('f_glucose').value),
+    hemoglobin: parseFloat(document.getElementById('f_hgb').value),
+    cholesterol_total: parseFloat(document.getElementById('f_chol').value),
+    wbc_count: parseFloat(document.getElementById('f_wbc').value),
+    rbc_count: parseFloat(document.getElementById('f_rbc').value),
+    platelet_count: parseFloat(document.getElementById('f_plt').value),
+    bmi: parseFloat(document.getElementById('f_bmi').value),
+    heart_rate: parseFloat(document.getElementById('f_hr').value),
+    smoker: document.getElementById('f_smoker').checked,
+    alcohol_use: document.getElementById('f_alcohol').checked,
+    family_history_diabetes: document.getElementById('f_fhd').checked,
+    family_history_heart: document.getElementById('f_fhh').checked,
+    fatigue: document.getElementById('f_fatigue').checked,
+    shortness_of_breath: document.getElementById('f_sob').checked,
+    chest_pain: document.getElementById('f_chestpain').checked,
+    frequent_urination: document.getElementById('f_urination').checked,
+    swelling: document.getElementById('f_swelling').checked,
+    jaundice: document.getElementById('f_jaundice').checked,
+    dizziness: document.getElementById('f_dizzy').checked,
+  };
+}
+
+function setPatient(v) {
+  document.getElementById('f_age').value = v.age;
+  document.getElementById('f_gender').value = v.gender;
+  document.getElementById('f_sbp').value = v.systolic_bp;
+  document.getElementById('f_dbp').value = v.diastolic_bp;
+  document.getElementById('f_glucose').value = v.glucose_fasting;
+  document.getElementById('f_hgb').value = v.hemoglobin;
+  document.getElementById('f_chol').value = v.cholesterol_total;
+  document.getElementById('f_wbc').value = v.wbc_count;
+  document.getElementById('f_rbc').value = v.rbc_count;
+  document.getElementById('f_plt').value = v.platelet_count;
+  document.getElementById('f_bmi').value = v.bmi;
+  document.getElementById('f_hr').value = v.heart_rate;
+  document.getElementById('f_smoker').checked = v.smoker;
+  document.getElementById('f_alcohol').checked = v.alcohol_use;
+  document.getElementById('f_fhd').checked = v.family_history_diabetes;
+  document.getElementById('f_fhh').checked = v.family_history_heart;
+  document.getElementById('f_fatigue').checked = v.fatigue;
+  document.getElementById('f_sob').checked = v.shortness_of_breath;
+  document.getElementById('f_chestpain').checked = v.chest_pain;
+  document.getElementById('f_urination').checked = v.frequent_urination;
+  document.getElementById('f_swelling').checked = v.swelling;
+  document.getElementById('f_jaundice').checked = v.jaundice;
+  document.getElementById('f_dizzy').checked = v.dizziness;
+}
+
+function initResultCards() {
+  const grid = document.getElementById('resultsGrid');
+  grid.innerHTML = '';
+  DISEASES.forEach(d => {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.id = 'card-' + d;
+    card.innerHTML = `
+      <div class="disease-name">${DISEASE_LABELS[d]}</div>
+      <div class="band idle"><span class="dot"></span><span>Awaiting input</span></div>
+      <div class="prob-num">—</div>
+      <div class="prob-bar-track"><div class="prob-bar-fill"></div></div>`;
+    grid.appendChild(card);
+  });
+}
+
+function renderResult(disease, result) {
+  const card = document.getElementById('card-' + disease);
+  if (!card || !result) return;
+  const pct = Math.round(result.probability * 1000) / 10;
+  let cls = 'safe', text = 'Low risk', color = 'var(--safe)';
+  if (result.risk_band === 'high') { cls = 'risk'; text = 'High risk'; color = 'var(--risk)'; }
+  else if (result.risk_band === 'elevated') { cls = 'warn'; text = 'Elevated risk'; color = 'var(--warn)'; }
+
+  card.querySelector('.band').className = 'band ' + cls;
+  card.querySelector('.band span:last-child').textContent = text;
+  card.querySelector('.prob-num').textContent = pct + '%';
+  card.querySelector('.prob-num').style.color = color;
+  const fill = card.querySelector('.prob-bar-fill');
+  fill.style.width = pct + '%';
+  fill.style.background = color;
+}
+
+function setStage(idx, cls) {
+  const stage = document.querySelector(`.pd-stage[data-stage="${idx}"]`);
+  stage.classList.remove('active', 'done', 'err');
+  if (cls) stage.classList.add(cls);
+}
+function resetStages() { [0,1,2,3].forEach(i => setStage(i, null)); }
+
+async function checkBackend() {
+  const dot = document.getElementById('statusDot');
+  const banner = document.getElementById('backendBanner');
+  try {
+    const resp = await fetch('/health', { method: 'GET' });
+    if (!resp.ok) throw new Error('bad status');
+    dot.classList.remove('offline');
+    banner.classList.remove('show');
+    return true;
+  } catch (e) {
+    dot.classList.add('offline');
+    banner.classList.add('show');
+    return false;
+  }
+}
+
+async function runAssessment() {
+  const btn = document.getElementById('runBtn');
+  const errorMsg = document.getElementById('errorMsg');
+  errorMsg.textContent = '';
+  btn.disabled = true;
+  resetStages();
+
+  setStage(0, 'active');
+  document.getElementById('stageDetail0').textContent = 'Payload assembled from the form.';
+  const patient = readPatient();
+  await sleep(220);
+  setStage(0, 'done'); setStage(1, 'active');
+  document.getElementById('stageDetail1').textContent = 'POST /predict/all — sending request...';
+
+  try {
+    const resp = await fetch('/predict/all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patient),
+    });
+    if (!resp.ok) {
+      const detail = await resp.text();
+      throw new Error(`Backend returned ${resp.status}: ${detail}`);
+    }
+    setStage(1, 'done'); setStage(2, 'active');
+    document.getElementById('stageDetail2').textContent = 'Scoring with 6 trained models...';
+    await sleep(200);
+
+    const data = await resp.json();
+    setStage(2, 'done'); setStage(3, 'active');
+    document.getElementById('stageDetail3').textContent = 'Rendering JSON response.';
+    await sleep(180);
+    setStage(3, 'done');
+
+    DISEASES.forEach(d => renderResult(d, data.predictions[d]));
+  } catch (err) {
+    setStage(1, 'err');
+    errorMsg.textContent = 'Request failed: ' + err.message;
+    checkBackend();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('runBtn').addEventListener('click', runAssessment);
+
+document.getElementById('loadLow').onclick = () => setPatient({
+  age: 27, gender: 'female', systolic_bp: 110, diastolic_bp: 70, glucose_fasting: 85,
+  hemoglobin: 13.9, cholesterol_total: 165, wbc_count: 6.2, rbc_count: 4.8, platelet_count: 275,
+  bmi: 21.0, heart_rate: 65, smoker: false, alcohol_use: false,
+  family_history_diabetes: false, family_history_heart: false,
+  fatigue: false, shortness_of_breath: false, chest_pain: false,
+  frequent_urination: false, swelling: false, jaundice: false, dizziness: false,
+});
+document.getElementById('loadHigh').onclick = () => setPatient({
+  age: 60, gender: 'male', systolic_bp: 150, diastolic_bp: 94, glucose_fasting: 140,
+  hemoglobin: 12.8, cholesterol_total: 250, wbc_count: 8.0, rbc_count: 4.5, platelet_count: 200,
+  bmi: 32.0, heart_rate: 90, smoker: true, alcohol_use: true,
+  family_history_diabetes: true, family_history_heart: true,
+  fatigue: true, shortness_of_breath: true, chest_pain: true,
+  frequent_urination: true, swelling: true, jaundice: true, dizziness: true,
+});
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+initResultCards();
+checkBackend();
+</script>
+</body>
+</html>
